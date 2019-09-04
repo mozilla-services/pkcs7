@@ -299,7 +299,7 @@ func TestVerifyFirefoxAddon(t *testing.T) {
 	p7.Content = FirefoxAddonContent
 	certPool := x509.NewCertPool()
 	certPool.AppendCertsFromPEM(FirefoxAddonRootCert)
-	if err := p7.VerifyWithChain(certPool); err != nil {
+	if err := p7.VerifyWithChain(certPool, nil); err != nil {
 		t.Errorf("Verify failed with error: %v", err)
 	}
 	// Verify the certificate chain to make sure the identified root
@@ -582,7 +582,7 @@ but that's not what ships are built for.
 				if err != nil {
 					t.Fatalf("Parse encountered unexpected error: %v", err)
 				}
-				if err := p7.VerifyWithChain(truststore); err != nil {
+				if err := p7.VerifyWithChain(truststore, nil); err != nil {
 					t.Fatalf("Verify failed with error: %v", err)
 				}
 				// Verify the certificate chain to make sure the identified root

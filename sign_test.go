@@ -77,7 +77,7 @@ func TestSign(t *testing.T) {
 					if !bytes.Equal(content, p7.Content) {
 						t.Errorf("test %s/%s/%s: content was not found in the parsed data:\n\tExpected: %s\n\tActual: %s", sigalgroot, sigalginter, sigalgsigner, content, p7.Content)
 					}
-					if err := p7.VerifyWithChain(truststore); err != nil {
+					if err := p7.VerifyWithChain(truststore, nil); err != nil {
 						t.Errorf("test %s/%s/%s: cannot verify signed data: %s", sigalgroot, sigalginter, sigalgsigner, err)
 					}
 					if !signerDigest.Equal(p7.Signers[0].DigestAlgorithm.Algorithm) {
