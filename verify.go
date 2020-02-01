@@ -14,31 +14,40 @@ import (
 // trust store, effectively disabling certificate verification when validating
 // a signature.
 func (p7 *PKCS7) Verify() (err error) {
-	return p7.VerifyWithChain(nil)
+	return p7.VerifyWithChain(nil, nil)
 }
 
 // VerifyWithChain checks the signatures of a PKCS7 object.
 // If truststore is not nil, it also verifies the chain of trust of the end-entity
 // signer cert to one of the root in the truststore.
-func (p7 *PKCS7) VerifyWithChain(truststore *x509.CertPool) (err error) {
+//
+// When verifying chains that may have expired, currentTime can be set to a past date
+// to allow the verification to pass. If unset, currentTime is set to the current UTC time.
+func (p7 *PKCS7) VerifyWithChain(truststore *x509.CertPool, signTime *time.Time) (err error) {
 	if len(p7.Signers) == 0 {
 		return errors.New("pkcs7: Message has no signers")
 	}
 	for _, signer := range p7.Signers {
-		if err := verifySignature(p7, signer, truststore); err != nil {
+		if err := verifySignature(p7, signer, truststore, signTime); err != nil {
 			return err
 		}
 	}
 	return nil
 }
 
-func verifySignature(p7 *PKCS7, signer signerInfo, truststore *x509.CertPool) (err error) {
+func verifySignature(p7 *PKCS7, signer signerInfo, truststore *x509.CertPool, signTime *time.Time) (err error) {
 	signedData := p7.Content
 	ee := getCertFromCertsByIssuerAndSerial(p7.Certificates, signer.IssuerAndSerialNumber)
 	if ee == nil {
 		return errors.New("pkcs7: No certificate for signer")
 	}
-	signingTime := time.Now().UTC()
+	var signingTime time.Time
+	if signTime == nil {
+		signingTime = time.Now().UTC()
+	} else {
+		signingTime = (*signTime).UTC()
+	}
+
 	if len(signer.AuthenticatedAttributes) > 0 {
 		// TODO(fullsailor): First check the content type match
 		var digest []byte
