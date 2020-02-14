@@ -31,6 +31,12 @@ type contentInfo struct {
 	Content     asn1.RawValue `asn1:"explicit,optional,tag:0"`
 }
 
+// EncryptionAlgorithmReporter allows custom crypto.Signer implementations
+// to report their encryption algorithm OID.
+type EncryptionAlgorithmReporter interface {
+	EncryptionAlgorithmOID() asn1.ObjectIdentifier
+}
+
 // ErrUnsupportedContentType is returned when a PKCS7 content is not supported.
 // Currently only Data (1.2.840.113549.1.7.1), Signed Data (1.2.840.113549.1.7.2),
 // and Enveloped Data are supported (1.2.840.113549.1.7.3)
@@ -117,7 +123,9 @@ func getDigestOIDForSignatureAlgorithm(digestAlg x509.SignatureAlgorithm) (asn1.
 // getOIDForEncryptionAlgorithm takes the private key type of the signer and
 // the OID of a digest algorithm to return the appropriate signerInfo.DigestEncryptionAlgorithm
 func getOIDForEncryptionAlgorithm(pkey crypto.PrivateKey, OIDDigestAlg asn1.ObjectIdentifier) (asn1.ObjectIdentifier, error) {
-	switch pkey.(type) {
+	switch v := pkey.(type) {
+	case EncryptionAlgorithmReporter:
+		return v.EncryptionAlgorithmOID(), nil
 	case *rsa.PrivateKey:
 		switch {
 		default:
