@@ -70,7 +70,7 @@ func TestBer2Der_NestedMultipleIndefinite(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ber2der failed with error: %v", err)
 	}
-	if bytes.Compare(der, expected) != 0 {
+	if !bytes.Equal(der, expected) {
 		t.Errorf("ber2der result did not match.\n\tExpected: % X\n\tActual: % X", expected, der)
 	}
 
