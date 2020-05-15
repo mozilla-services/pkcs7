@@ -182,6 +182,36 @@ func Parse(data []byte) (p7 *PKCS7, err error) {
 	return nil, ErrUnsupportedContentType
 }
 
+// Parse decodes a DER encoded PKCS7 package without a Content Type
+func ParseRawData(ContentType asn1.ObjectIdentifier, data []byte) (p7 *PKCS7, err error) {
+	if len(data) == 0 {
+		return nil, errors.New("pkcs7: input data is empty")
+	}
+
+	var info asn1.RawValue
+	der, err := ber2der(data)
+	if err != nil {
+		return nil, err
+	}
+	rest, err := asn1.Unmarshal(der, &info)
+	if len(rest) > 0 {
+		err = asn1.SyntaxError{Msg: "trailing data"}
+		return
+	} else if err != nil {
+		return
+	}
+
+	switch {
+	case ContentType.Equal(OIDSignedData):
+		return parseSignedData(info.Bytes)
+	case ContentType.Equal(OIDEnvelopedData):
+		return parseEnvelopedData(info.Bytes)
+	case ContentType.Equal(OIDEncryptedData):
+		return parseEncryptedData(info.Bytes)
+	}
+	return nil, ErrUnsupportedContentType
+}
+
 func parseEnvelopedData(data []byte) (*PKCS7, error) {
 	var ed envelopedData
 	if _, err := asn1.Unmarshal(data, &ed); err != nil {
