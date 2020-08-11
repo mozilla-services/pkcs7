@@ -117,32 +117,35 @@ func getDigestOIDForSignatureAlgorithm(digestAlg x509.SignatureAlgorithm) (asn1.
 // getOIDForEncryptionAlgorithm takes the private key type of the signer and
 // the OID of a digest algorithm to return the appropriate signerInfo.DigestEncryptionAlgorithm
 func getOIDForEncryptionAlgorithm(pkey crypto.PrivateKey, OIDDigestAlg asn1.ObjectIdentifier) (asn1.ObjectIdentifier, error) {
-	switch pkey.(type) {
-	case *rsa.PrivateKey:
-		switch {
-		default:
-			return OIDEncryptionAlgorithmRSA, nil
-		case OIDDigestAlg.Equal(OIDEncryptionAlgorithmRSA):
-			return OIDEncryptionAlgorithmRSA, nil
-		case OIDDigestAlg.Equal(OIDDigestAlgorithmSHA1):
-			return OIDEncryptionAlgorithmRSASHA1, nil
-		case OIDDigestAlg.Equal(OIDDigestAlgorithmSHA256):
-			return OIDEncryptionAlgorithmRSASHA256, nil
-		case OIDDigestAlg.Equal(OIDDigestAlgorithmSHA384):
-			return OIDEncryptionAlgorithmRSASHA384, nil
-		case OIDDigestAlg.Equal(OIDDigestAlgorithmSHA512):
-			return OIDEncryptionAlgorithmRSASHA512, nil
-		}
-	case *ecdsa.PrivateKey:
-		switch {
-		case OIDDigestAlg.Equal(OIDDigestAlgorithmSHA1):
-			return OIDDigestAlgorithmECDSASHA1, nil
-		case OIDDigestAlg.Equal(OIDDigestAlgorithmSHA256):
-			return OIDDigestAlgorithmECDSASHA256, nil
-		case OIDDigestAlg.Equal(OIDDigestAlgorithmSHA384):
-			return OIDDigestAlgorithmECDSASHA384, nil
-		case OIDDigestAlg.Equal(OIDDigestAlgorithmSHA512):
-			return OIDDigestAlgorithmECDSASHA512, nil
+	switch key := pkey.(type) {
+	case crypto.Signer:
+		switch key.Public().(type) {
+		case *rsa.PublicKey, rsa.PublicKey:
+			switch {
+			default:
+				return OIDEncryptionAlgorithmRSA, nil
+			case OIDDigestAlg.Equal(OIDEncryptionAlgorithmRSA):
+				return OIDEncryptionAlgorithmRSA, nil
+			case OIDDigestAlg.Equal(OIDDigestAlgorithmSHA1):
+				return OIDEncryptionAlgorithmRSASHA1, nil
+			case OIDDigestAlg.Equal(OIDDigestAlgorithmSHA256):
+				return OIDEncryptionAlgorithmRSASHA256, nil
+			case OIDDigestAlg.Equal(OIDDigestAlgorithmSHA384):
+				return OIDEncryptionAlgorithmRSASHA384, nil
+			case OIDDigestAlg.Equal(OIDDigestAlgorithmSHA512):
+				return OIDEncryptionAlgorithmRSASHA512, nil
+			}
+		case *ecdsa.PublicKey, ecdsa.PublicKey:
+			switch {
+			case OIDDigestAlg.Equal(OIDDigestAlgorithmSHA1):
+				return OIDDigestAlgorithmECDSASHA1, nil
+			case OIDDigestAlg.Equal(OIDDigestAlgorithmSHA256):
+				return OIDDigestAlgorithmECDSASHA256, nil
+			case OIDDigestAlg.Equal(OIDDigestAlgorithmSHA384):
+				return OIDDigestAlgorithmECDSASHA384, nil
+			case OIDDigestAlg.Equal(OIDDigestAlgorithmSHA512):
+				return OIDDigestAlgorithmECDSASHA512, nil
+			}
 		}
 	case *dsa.PrivateKey:
 		return OIDDigestAlgorithmDSA, nil
