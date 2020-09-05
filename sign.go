@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"crypto"
 	"crypto/dsa"
+	"crypto/ed25519"
 	"crypto/rand"
 	"crypto/x509"
 	"crypto/x509/pkix"
@@ -368,6 +369,8 @@ func signAttributes(attrs []attribute, pkey crypto.PrivateKey, digestAlg crypto.
 			return nil, err
 		}
 		return asn1.Marshal(dsaSignature{r, s})
+	case ed25519.PrivateKey:
+		return pkey.Sign(rand.Reader, attrBytes, crypto.Hash(0))
 	}
 
 	key, ok := pkey.(crypto.Signer)

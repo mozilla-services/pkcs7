@@ -6,6 +6,7 @@ import (
 	"crypto"
 	"crypto/dsa"
 	"crypto/ecdsa"
+	"crypto/ed25519"
 	"crypto/rsa"
 	"crypto/x509"
 	"crypto/x509/pkix"
@@ -72,6 +73,7 @@ var (
 	OIDEncryptionAlgorithmECDSAP256 = asn1.ObjectIdentifier{1, 2, 840, 10045, 3, 1, 7}
 	OIDEncryptionAlgorithmECDSAP384 = asn1.ObjectIdentifier{1, 3, 132, 0, 34}
 	OIDEncryptionAlgorithmECDSAP521 = asn1.ObjectIdentifier{1, 3, 132, 0, 35}
+	OIDEncryptionAlgorithmEd25519   = asn1.ObjectIdentifier{1, 3, 101, 112}
 
 	// Encryption Algorithms
 	OIDEncryptionAlgorithmDESCBC     = asn1.ObjectIdentifier{1, 3, 14, 3, 2, 7}
@@ -108,7 +110,7 @@ func getDigestOIDForSignatureAlgorithm(digestAlg x509.SignatureAlgorithm) (asn1.
 		return OIDDigestAlgorithmSHA256, nil
 	case x509.SHA384WithRSA, x509.ECDSAWithSHA384:
 		return OIDDigestAlgorithmSHA384, nil
-	case x509.SHA512WithRSA, x509.ECDSAWithSHA512:
+	case x509.SHA512WithRSA, x509.ECDSAWithSHA512, x509.PureEd25519:
 		return OIDDigestAlgorithmSHA512, nil
 	}
 	return nil, fmt.Errorf("pkcs7: cannot convert hash to oid, unknown hash algorithm")
@@ -146,6 +148,8 @@ func getOIDForEncryptionAlgorithm(pkey crypto.PrivateKey, OIDDigestAlg asn1.Obje
 		}
 	case *dsa.PrivateKey:
 		return OIDDigestAlgorithmDSA, nil
+	case ed25519.PrivateKey:
+		return OIDEncryptionAlgorithmEd25519, nil
 	}
 	return nil, fmt.Errorf("pkcs7: cannot convert encryption algorithm to oid, unknown private key type %T", pkey)
 
