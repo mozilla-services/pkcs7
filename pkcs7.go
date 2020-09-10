@@ -63,11 +63,13 @@ var (
 	OIDDigestAlgorithmECDSASHA512 = asn1.ObjectIdentifier{1, 2, 840, 10045, 4, 3, 4}
 
 	// Signature Algorithms
-	OIDEncryptionAlgorithmRSA       = asn1.ObjectIdentifier{1, 2, 840, 113549, 1, 1, 1}
-	OIDEncryptionAlgorithmRSASHA1   = asn1.ObjectIdentifier{1, 2, 840, 113549, 1, 1, 5}
-	OIDEncryptionAlgorithmRSASHA256 = asn1.ObjectIdentifier{1, 2, 840, 113549, 1, 1, 11}
-	OIDEncryptionAlgorithmRSASHA384 = asn1.ObjectIdentifier{1, 2, 840, 113549, 1, 1, 12}
-	OIDEncryptionAlgorithmRSASHA512 = asn1.ObjectIdentifier{1, 2, 840, 113549, 1, 1, 13}
+	OIDEncryptionAlgorithmRSA         = asn1.ObjectIdentifier{1, 2, 840, 113549, 1, 1, 1}
+	OIDEncryptionAlgorithmRSAMD5      = asn1.ObjectIdentifier{1, 2, 840, 113549, 1, 1, 4}
+	OIDEncryptionAlgorithmRSASHA1     = asn1.ObjectIdentifier{1, 2, 840, 113549, 1, 1, 5}
+	OIDEncryptionAlgorithmidRSAESOAEP = asn1.ObjectIdentifier{1, 2, 840, 113549, 1, 1, 7}
+	OIDEncryptionAlgorithmRSASHA256   = asn1.ObjectIdentifier{1, 2, 840, 113549, 1, 1, 11}
+	OIDEncryptionAlgorithmRSASHA384   = asn1.ObjectIdentifier{1, 2, 840, 113549, 1, 1, 12}
+	OIDEncryptionAlgorithmRSASHA512   = asn1.ObjectIdentifier{1, 2, 840, 113549, 1, 1, 13}
 
 	OIDEncryptionAlgorithmECDSAP256 = asn1.ObjectIdentifier{1, 2, 840, 10045, 3, 1, 7}
 	OIDEncryptionAlgorithmECDSAP384 = asn1.ObjectIdentifier{1, 3, 132, 0, 34}
