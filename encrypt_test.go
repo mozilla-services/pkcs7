@@ -3,6 +3,7 @@ package pkcs7
 import (
 	"bytes"
 	"crypto/x509"
+	"encoding/asn1"
 	"testing"
 )
 
@@ -14,34 +15,57 @@ func TestEncrypt(t *testing.T) {
 		EncryptionAlgorithmAES128GCM,
 		EncryptionAlgorithmAES256GCM,
 	}
+
+	keyModes := []asn1.ObjectIdentifier{
+		OIDEncryptionAlgorithmRSA,
+		OIDEncryptionAlgorithmidRSAESOAEP,
+		OIDEncryptionAlgorithmRSAMD5,
+		OIDEncryptionAlgorithmRSASHA1,
+		OIDEncryptionAlgorithmRSASHA256,
+		OIDEncryptionAlgorithmRSASHA384,
+		OIDEncryptionAlgorithmRSASHA512,
+	}
+
 	sigalgs := []x509.SignatureAlgorithm{
 		x509.SHA1WithRSA,
 		x509.SHA256WithRSA,
 		x509.SHA512WithRSA,
 	}
+
 	for _, mode := range modes {
 		for _, sigalg := range sigalgs {
-			ContentEncryptionAlgorithm = mode
+			for _, keyMode := range keyModes {
 
-			plaintext := []byte("Hello Secret World!")
-			cert, err := createTestCertificate(sigalg)
-			if err != nil {
-				t.Fatal(err)
-			}
-			encrypted, err := Encrypt(plaintext, []*x509.Certificate{cert.Certificate})
-			if err != nil {
-				t.Fatal(err)
-			}
-			p7, err := Parse(encrypted)
-			if err != nil {
-				t.Fatalf("cannot Parse encrypted result: %s", err)
-			}
-			result, err := p7.Decrypt(cert.Certificate, *cert.PrivateKey)
-			if err != nil {
-				t.Fatalf("cannot Decrypt encrypted result: %s", err)
-			}
-			if !bytes.Equal(plaintext, result) {
-				t.Errorf("encrypted data does not match plaintext:\n\tExpected: %s\n\tActual: %s", plaintext, result)
+				//wrong key size for alg
+				if sigalg == x509.SHA1WithRSA &&
+					keyMode.Equal(OIDEncryptionAlgorithmRSASHA512) ||
+					keyMode.Equal(OIDEncryptionAlgorithmRSASHA384){
+					continue
+				}
+
+				ContentEncryptionAlgorithm = mode
+				KeyEncryptionAlgorithm = keyMode
+
+				plaintext := []byte("Hello Secret World!")
+				cert, err := createTestCertificate(sigalg)
+				if err != nil {
+					t.Fatal(err)
+				}
+				encrypted, err := Encrypt(plaintext, []*x509.Certificate{cert.Certificate})
+				if err != nil {
+					t.Fatal(err)
+				}
+				p7, err := Parse(encrypted)
+				if err != nil {
+					t.Fatalf("cannot Parse encrypted result: %s", err)
+				}
+				result, err := p7.Decrypt(cert.Certificate, *cert.PrivateKey)
+				if err != nil {
+					t.Fatalf("cannot Decrypt encrypted result: %s", err)
+				}
+				if !bytes.Equal(plaintext, result) {
+					t.Errorf("encrypted data does not match plaintext:\n\tExpected: %s\n\tActual: %s", plaintext, result)
+				}
 			}
 		}
 	}

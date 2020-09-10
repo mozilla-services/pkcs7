@@ -6,8 +6,12 @@ import (
 	"crypto/aes"
 	"crypto/cipher"
 	"crypto/des"
+	"crypto/md5"
 	"crypto/rand"
 	"crypto/rsa"
+	"crypto/sha1"
+	"crypto/sha256"
+	"crypto/sha512"
 	"crypto/x509"
 	"encoding/asn1"
 	"errors"
@@ -20,6 +24,31 @@ var ErrUnsupportedAlgorithm = errors.New("pkcs7: cannot decrypt data: only RSA, 
 // ErrNotEncryptedContent is returned when attempting to Decrypt data that is not encrypted data
 var ErrNotEncryptedContent = errors.New("pkcs7: content data is a decryptable data type")
 
+func getDecryptedKey(algorithm asn1.ObjectIdentifier, key crypto.PrivateKey, encryptedKey []byte) ([]byte, error) {
+	switch pkey := key.(type) {
+	case *rsa.PrivateKey:
+		switch {
+		case algorithm.Equal(OIDEncryptionAlgorithmidRSAESOAEP):
+			//TODO: Default to one?
+			return rsa.DecryptOAEP(OAEPHashFunction, rand.Reader, pkey, encryptedKey, nil)
+
+		case algorithm.Equal(OIDEncryptionAlgorithmRSA):
+			return rsa.DecryptPKCS1v15(rand.Reader, pkey, encryptedKey)
+		case algorithm.Equal(OIDEncryptionAlgorithmRSAMD5):
+			return rsa.DecryptOAEP(md5.New(), rand.Reader, pkey, encryptedKey, nil)
+		case algorithm.Equal(OIDEncryptionAlgorithmRSASHA1):
+			return rsa.DecryptOAEP(sha1.New(), rand.Reader, pkey, encryptedKey, nil)
+		case algorithm.Equal(OIDEncryptionAlgorithmRSASHA256):
+			return rsa.DecryptOAEP(sha256.New(), rand.Reader, pkey, encryptedKey, nil)
+		case algorithm.Equal(OIDEncryptionAlgorithmRSASHA384):
+			return rsa.DecryptOAEP(sha512.New384(), rand.Reader, pkey, encryptedKey, nil)
+		case algorithm.Equal(OIDEncryptionAlgorithmRSASHA512):
+			return rsa.DecryptOAEP(sha512.New(), rand.Reader, pkey, encryptedKey, nil)
+		}
+	}
+	return nil, ErrUnsupportedAlgorithm
+}
+
 // Decrypt decrypts encrypted content info for recipient cert and private key
 func (p7 *PKCS7) Decrypt(cert *x509.Certificate, pkey crypto.PrivateKey) ([]byte, error) {
 	data, ok := p7.raw.(envelopedData)
@@ -30,16 +59,12 @@ func (p7 *PKCS7) Decrypt(cert *x509.Certificate, pkey crypto.PrivateKey) ([]byte
 	if recipient.EncryptedKey == nil {
 		return nil, errors.New("pkcs7: no enveloped recipient for provided certificate")
 	}
-	switch pkey := pkey.(type) {
-	case *rsa.PrivateKey:
-		var contentKey []byte
-		contentKey, err := rsa.DecryptPKCS1v15(rand.Reader, pkey, recipient.EncryptedKey)
-		if err != nil {
-			return nil, err
-		}
-		return data.EncryptedContentInfo.decrypt(contentKey)
+
+	contentKey, err := getDecryptedKey(recipient.KeyEncryptionAlgorithm.Algorithm, pkey, recipient.EncryptedKey)
+	if err != nil {
+		return nil, err
 	}
-	return nil, ErrUnsupportedAlgorithm
+	return data.EncryptedContentInfo.decrypt(contentKey)
 }
 
 // DecryptUsingPSK decrypts encrypted data using caller provided

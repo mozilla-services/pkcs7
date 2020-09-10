@@ -5,8 +5,12 @@ import (
 	"crypto/aes"
 	"crypto/cipher"
 	"crypto/des"
+	"crypto/md5"
 	"crypto/rand"
 	"crypto/rsa"
+	"crypto/sha1"
+	"crypto/sha256"
+	"crypto/sha512"
 	"crypto/x509"
 	"crypto/x509/pkix"
 	"encoding/asn1"
@@ -61,6 +65,17 @@ const (
 // plaintext message. Change the value of this variable to change which
 // algorithm is used in the Encrypt() function.
 var ContentEncryptionAlgorithm = EncryptionAlgorithmDESCBC
+
+// ContentEncryptionAlgorithm determines the algorithm used to encrypt the
+// decryption key. Change the value of this variable to change which
+// algorithm is used in the Encrypt() function.
+// TODO: Pass as param on encrypt?
+var KeyEncryptionAlgorithm = OIDEncryptionAlgorithmRSA
+
+// OAEPHashFunction determines which hash function is used during rsa.EncryptOAEP
+// and rsa.DecryptOAEP when not otherwise specified.
+// TODO: Default to other?
+var OAEPHashFunction = sha256.New()
 
 // ErrUnsupportedEncryptionAlgorithm is returned when attempting to encrypt
 // content with an unsupported algorithm.
@@ -300,7 +315,7 @@ func Encrypt(content []byte, recipients []*x509.Certificate) ([]byte, error) {
 			Version:               0,
 			IssuerAndSerialNumber: ias,
 			KeyEncryptionAlgorithm: pkix.AlgorithmIdentifier{
-				Algorithm: OIDEncryptionAlgorithmRSA,
+				Algorithm: KeyEncryptionAlgorithm,
 			},
 			EncryptedKey: encrypted,
 		}
@@ -381,7 +396,23 @@ func marshalEncryptedContent(content []byte) asn1.RawValue {
 
 func encryptKey(key []byte, recipient *x509.Certificate) ([]byte, error) {
 	if pub := recipient.PublicKey.(*rsa.PublicKey); pub != nil {
-		return rsa.EncryptPKCS1v15(rand.Reader, pub, key)
+		switch {
+		case KeyEncryptionAlgorithm.Equal(OIDEncryptionAlgorithmidRSAESOAEP):
+			return rsa.EncryptOAEP(OAEPHashFunction, rand.Reader, pub, key, nil)
+
+		case KeyEncryptionAlgorithm.Equal(OIDEncryptionAlgorithmRSA):
+			return rsa.EncryptPKCS1v15(rand.Reader, pub, key)
+		case KeyEncryptionAlgorithm.Equal(OIDEncryptionAlgorithmRSAMD5):
+			return rsa.EncryptOAEP(md5.New(), rand.Reader, pub, key, nil)
+		case KeyEncryptionAlgorithm.Equal(OIDEncryptionAlgorithmRSASHA1):
+			return rsa.EncryptOAEP(sha1.New(), rand.Reader, pub, key, nil)
+		case KeyEncryptionAlgorithm.Equal(OIDEncryptionAlgorithmRSASHA256):
+			return rsa.EncryptOAEP(sha256.New(), rand.Reader, pub, key, nil)
+		case KeyEncryptionAlgorithm.Equal(OIDEncryptionAlgorithmRSASHA384):
+			return rsa.EncryptOAEP(sha512.New384(), rand.Reader, pub, key, nil)
+		case KeyEncryptionAlgorithm.Equal(OIDEncryptionAlgorithmRSASHA512):
+			return rsa.EncryptOAEP(sha512.New(), rand.Reader, pub, key, nil)
+		}
 	}
 	return nil, ErrUnsupportedAlgorithm
 }
