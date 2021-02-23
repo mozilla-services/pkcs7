@@ -9,9 +9,11 @@ import (
 	"crypto/rand"
 	"crypto/rsa"
 	"crypto/x509"
+	"crypto/x509/pkix"
 	"encoding/asn1"
 	"errors"
 	"fmt"
+	"hash"
 )
 
 // ErrUnsupportedAlgorithm tells you when our quick dev assumptions have failed
@@ -19,6 +21,14 @@ var ErrUnsupportedAlgorithm = errors.New("pkcs7: cannot decrypt data: only RSA, 
 
 // ErrNotEncryptedContent is returned when attempting to Decrypt data that is not encrypted data
 var ErrNotEncryptedContent = errors.New("pkcs7: content data is a decryptable data type")
+
+// RFC 4055, 4.1
+// The current ASN.1 parser does not support non-integer defaults so the 'default:' tags here do nothing.
+type rsaOAEPAlgorithmParameters struct {
+	HashFunc    pkix.AlgorithmIdentifier `asn1:"optional,explicit,tag:0,default:sha1Identifier"`
+	MaskGenFunc pkix.AlgorithmIdentifier `asn1:"optional,explicit,tag:1,default:mgf1SHA1Identifier"`
+	PSourceFunc pkix.AlgorithmIdentifier `asn1:"optional,explicit,tag:2,default:pSpecifiedEmptyIdentifier"`
+}
 
 // Decrypt decrypts encrypted content info for recipient cert and private key
 func (p7 *PKCS7) Decrypt(cert *x509.Certificate, pkey crypto.PrivateKey) ([]byte, error) {
@@ -33,7 +43,29 @@ func (p7 *PKCS7) Decrypt(cert *x509.Certificate, pkey crypto.PrivateKey) ([]byte
 	switch pkey := pkey.(type) {
 	case *rsa.PrivateKey:
 		var contentKey []byte
-		contentKey, err := rsa.DecryptPKCS1v15(rand.Reader, pkey, recipient.EncryptedKey)
+		var err error
+		switch {
+		case recipient.KeyEncryptionAlgorithm.Algorithm.Equal(OIDEncryptionAlgorithmRSA):
+			contentKey, err = rsa.DecryptPKCS1v15(rand.Reader, pkey, recipient.EncryptedKey)
+		case recipient.KeyEncryptionAlgorithm.Algorithm.Equal(OIDEncryptionAlgorithmRSAESOAEP):
+			params := new(rsaOAEPAlgorithmParameters)
+			var rest []byte
+			rest, err = asn1.Unmarshal(recipient.KeyEncryptionAlgorithm.Parameters.FullBytes, params)
+			if err != nil {
+				return nil, err
+			}
+			if len(rest) != 0 {
+				return nil, errors.New("pkcs7: trailing data after RSAES-OAEP parameters")
+			}
+			var hash hash.Hash
+			hash, err = getHashFuncFromRSAOAEPParams(params)
+			if err != nil {
+				return nil, err
+			}
+			contentKey, err = rsa.DecryptOAEP(hash, rand.Reader, pkey, recipient.EncryptedKey, nil)
+		default:
+			return nil, ErrUnsupportedAlgorithm
+		}
 		if err != nil {
 			return nil, err
 		}
@@ -174,4 +206,21 @@ func selectRecipientForCertificate(recipients []recipientInfo, cert *x509.Certif
 		}
 	}
 	return recipientInfo{}
+}
+
+func getHashFuncFromRSAOAEPParams(params *rsaOAEPAlgorithmParameters) (hash.Hash, error) {
+	// The default is SHA-1.
+	if params.HashFunc.Algorithm == nil || params.HashFunc.Algorithm.Equal(OIDDigestAlgorithmSHA1) {
+		return crypto.SHA1.New(), nil
+	}
+	if params.HashFunc.Algorithm.Equal(OIDDigestAlgorithmSHA256) {
+		return crypto.SHA256.New(), nil
+	}
+	if params.HashFunc.Algorithm.Equal(OIDDigestAlgorithmSHA384) {
+		return crypto.SHA384.New(), nil
+	}
+	if params.HashFunc.Algorithm.Equal(OIDDigestAlgorithmSHA512) {
+		return crypto.SHA512.New(), nil
+	}
+	return nil, errors.New("pkcs7: unsupported hash function for RSA-OAEP")
 }

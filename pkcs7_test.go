@@ -317,7 +317,7 @@ func UnmarshalTestFixture(testPEMBlock string) TestFixture {
 			result.Input = derBlock.Bytes
 		case "CERTIFICATE":
 			result.Certificate, _ = x509.ParseCertificate(derBlock.Bytes)
-		case "PRIVATE KEY":
+		case "PRIVATE KEY", "RSA PRIVATE KEY":
 			result.PrivateKey, _ = x509.ParsePKCS1PrivateKey(derBlock.Bytes)
 		}
 	}
