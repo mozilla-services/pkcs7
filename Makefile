@@ -1,4 +1,4 @@
-all: vet staticcheck test
+all: vet test
 
 test:
 	go test -covermode=count -coverprofile=coverage.out .
