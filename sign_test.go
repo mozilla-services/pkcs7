@@ -234,6 +234,34 @@ func TestDegenerateCertificate(t *testing.T) {
 	pem.Encode(os.Stdout, &pem.Block{Type: "PKCS7", Bytes: deg})
 }
 
+func TestSkipCertificates(t *testing.T) {
+	cert, err := createTestCertificate(x509.SHA512WithRSA)
+	if err != nil {
+		t.Fatal(err)
+	}
+	content := []byte("Hello World")
+	toBeSigned, err := NewSignedData(content)
+	if err != nil {
+		t.Fatalf("Cannot initialize signed data: %s", err)
+	}
+	if err := toBeSigned.AddSigner(cert.Certificate, *cert.PrivateKey, SignerInfoConfig{
+		SkipCertificates: true,
+	}); err != nil {
+		t.Fatalf("Cannot add signer: %s", err)
+	}
+	signed, err := toBeSigned.Finish()
+	if err != nil {
+		t.Fatalf("Cannot finish signing data: %s", err)
+	}
+	p7, err := Parse(signed)
+	if err != nil {
+		t.Fatalf("Cannot parse signed data: %v", err)
+	}
+	if len(p7.Certificates) > 0 {
+		t.Fatalf("Got %d certificate(s), exected none", len(p7.Certificates))
+	}
+}
+
 // writes the cert to a temporary file and tests that openssl can read it.
 func testOpenSSLParse(t *testing.T, certBytes []byte) {
 	tmpCertFile, err := ioutil.TempFile("", "testCertificate")
