@@ -44,7 +44,12 @@ func TestBer2Der_Negatives(t *testing.T) {
 		Input         []byte
 		ErrorContains string
 	}{
-		{[]byte{0x30, 0x85}, "tag length too long"},
+		{[]byte{}, "input ber is empty"},
+		{[]byte{0x30}, "cannot move offset forward, end of ber data reached"},
+		{[]byte{0x30, 0x08}, "BER tag length is more than available dat"},
+		{[]byte{0x30, 0x81}, "cannot move offset forward, end of ber data reached"},
+		{[]byte{0x30, 0x81, 0x00}, "BER tag length has leading zero"},
+		{[]byte{0x30, 0x85, 0x00}, "tag length too long"},
 		{[]byte{0x30, 0x84, 0x80, 0x0, 0x0, 0x0}, "length is negative"},
 		{[]byte{0x30, 0x82, 0x0, 0x1}, "length has leading zero"},
 		{[]byte{0x30, 0x80, 0x1, 0x2, 0x1, 0x2}, "Invalid BER format"},
