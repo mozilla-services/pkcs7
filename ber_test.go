@@ -109,6 +109,17 @@ func TestVerifyIndefiniteLengthBer(t *testing.T) {
 	}
 }
 
+func TestLimitDepth(t *testing.T) {
+	_, err := ber2der([]byte(badHTMLInput))
+
+	if err == nil {
+		t.Errorf("ber2der should have aborted due to depth")
+	}
+	if err.Error() != "ber2der: object contains more than 80 levels of nesting" {
+		t.Errorf("ber2der failed for unexpected reason: %v", err)
+	}
+}
+
 func mustDecodePEM(data []byte) []byte {
 	var block *pem.Block
 	block, rest := pem.Decode(data)
@@ -183,4 +194,23 @@ Cgl8Nlvalz7YxXEf2clFEiEVa1fVaGMl9pCyedAmTfd6hoivcpAsopvXfVaaaR2y
 iuZidpUfFhSk+Ls7TU/kB74ckfUGj5q/5HcKJgb/S+FYUV7eu0ewzTyW1uRl/d0U
 Tb7e7EjgDGJsjOTMdTrMfv8ho8kAAAAAAAA=
 -----END PKCS7-----
+`
+
+const badHTMLInput = `<!doctype html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <meta http-equiv="x-ua-compatible" content="ie=edge">
+    <title>Web Page Blocked!</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <style type="text/css">
+        body {
+            background-color: #eaeaea;
+            font-family: Helvetica, Arial, sans-serif;
+            text-align: center;
+        }
+
+        a {
+            color: #2274b9;
+        }
 `

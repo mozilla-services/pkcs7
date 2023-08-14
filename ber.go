@@ -6,6 +6,7 @@ import (
 )
 
 var encodeIndent = 0
+var MAXIMUM_DEPTH = 80
 
 type asn1Object interface {
 	EncodeTo(writer *bytes.Buffer) error
@@ -61,7 +62,7 @@ func ber2der(ber []byte) ([]byte, error) {
 	//fmt.Printf("--> ber2der: Transcoding %d bytes\n", len(ber))
 	out := new(bytes.Buffer)
 
-	obj, _, err := readObject(ber, 0)
+	obj, _, err := readObject(ber, 0, 0)
 	if err != nil {
 		return nil, err
 	}
@@ -132,7 +133,7 @@ func encodeLength(out *bytes.Buffer, length int) (err error) {
 	return
 }
 
-func readObject(ber []byte, offset int) (asn1Object, int, error) {
+func readObject(ber []byte, offset int, depth int) (asn1Object, int, error) {
 	berLen := len(ber)
 	if offset >= berLen {
 		return nil, 0, errors.New("ber2der: offset is after end of ber data")
@@ -140,8 +141,12 @@ func readObject(ber []byte, offset int) (asn1Object, int, error) {
 	tagStart := offset
 	b := ber[offset]
 	offset++
+	depth++
 	if offset >= berLen {
 		return nil, 0, errors.New("ber2der: cannot move offset forward, end of ber data reached")
+	}
+	if depth > MAXIMUM_DEPTH {
+		return nil, 0, errors.New("ber2der: object contains more than 80 levels of nesting")
 	}
 	tag := b & 0x1F // last 5 bits
 	if tag == 0x1F {
@@ -209,6 +214,7 @@ func readObject(ber []byte, offset int) (asn1Object, int, error) {
 	if contentEnd > len(ber) {
 		return nil, 0, errors.New("ber2der: BER tag length is more than available data")
 	}
+	debugprint("--> depth         : %d\n", depth)
 	debugprint("--> content start : %d\n", offset)
 	debugprint("--> content end   : %d\n", contentEnd)
 	debugprint("--> content       : % X\n", ber[offset:contentEnd])
@@ -227,7 +233,7 @@ func readObject(ber []byte, offset int) (asn1Object, int, error) {
 		for (offset < contentEnd) || indefinite {
 			var subObj asn1Object
 			var err error
-			subObj, offset, err = readObject(ber, offset)
+			subObj, offset, err = readObject(ber, offset, depth)
 			if err != nil {
 				return nil, 0, err
 			}
@@ -259,7 +265,7 @@ func readObject(ber []byte, offset int) (asn1Object, int, error) {
 }
 
 func isIndefiniteTermination(ber []byte, offset int) (bool, error) {
-	if len(ber) - offset < 2 {
+	if len(ber)-offset < 2 {
 		return false, errors.New("ber2der: Invalid BER format")
 	}
 
@@ -267,5 +273,5 @@ func isIndefiniteTermination(ber []byte, offset int) (bool, error) {
 }
 
 func debugprint(format string, a ...interface{}) {
-	//fmt.Printf(format, a)
+	//fmt.Printf(format, a...)
 }
