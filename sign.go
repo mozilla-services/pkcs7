@@ -243,9 +243,9 @@ func (sd *SignedData) SignWithoutAttr(ee *x509.Certificate, pkey crypto.PrivateK
 		// if the encryption algorithm wasn't set by SetEncryptionAlgorithm,
 		// infer it from the digest algorithm
 		sd.encryptionOid, err = getOIDForEncryptionAlgorithm(pkey, sd.digestOid)
-	}
-	if err != nil {
-		return err
+		if err != nil {
+			return err
+		}
 	}
 	signer := signerInfo{
 		DigestAlgorithm:           pkix.AlgorithmIdentifier{Algorithm: sd.digestOid},
