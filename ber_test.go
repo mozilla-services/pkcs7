@@ -53,14 +53,15 @@ func TestBer2Der_Negatives(t *testing.T) {
 		{[]byte{0x30, 0x80, 0x1, 0x2}, "BER tag length is more than available data"},
 		{[]byte{0x30, 0x03, 0x01, 0x02}, "length is more than available data"},
 		{[]byte{0x30}, "end of ber data reached"},
+		{[]byte{0x30, 0x4, 0x30, 0x3, 0x02, 0x01, 0x01},
+			"a nested object spans beyond parent's length"},
 	}
 
 	for _, fixture := range fixtures {
 		_, err := ber2der(fixture.Input)
 		if err == nil {
 			t.Errorf("No error thrown. Expected: %s", fixture.ErrorContains)
-		}
-		if !strings.Contains(err.Error(), fixture.ErrorContains) {
+		} else if !strings.Contains(err.Error(), fixture.ErrorContains) {
 			t.Errorf("Unexpected error thrown.\n\tExpected: /%s/\n\tActual: %s", fixture.ErrorContains, err.Error())
 		}
 	}
