@@ -1,93 +1,31 @@
 package pkcs7
 
 import (
-	"bytes"
 	"errors"
 )
 
-type asn1Object interface {
-	EncodeTo(writer *bytes.Buffer) error
-}
-
-type asn1Structured struct {
-	tagBytes []byte
-	content  []asn1Object
-}
-
-func (s asn1Structured) EncodeTo(out *bytes.Buffer) error {
-	inner := new(bytes.Buffer)
-	for _, obj := range s.content {
-		err := obj.EncodeTo(inner)
-		if err != nil {
-			return err
-		}
-	}
-	out.Write(s.tagBytes)
-	encodeLength(out, inner.Len())
-	out.Write(inner.Bytes())
-	return nil
-}
-
-type asn1Primitive struct {
-	tagBytes []byte
-	length   int
-	content  []byte
-}
-
-func (p asn1Primitive) EncodeTo(out *bytes.Buffer) error {
-	_, err := out.Write(p.tagBytes)
-	if err != nil {
-		return err
-	}
-	if err = encodeLength(out, p.length); err != nil {
-		return err
-	}
-	out.Write(p.content)
-	return nil
-}
-
+// Replaces all indefinite length encodings of BER object with definite ones.
+// With typical cases this is enough to make the result DER-compatible.
 func ber2der(ber []byte) ([]byte, error) {
 	if len(ber) == 0 {
 		return nil, errors.New("ber2der: input ber is empty")
 	}
-	out := new(bytes.Buffer)
 
-	obj, _, err := readObject(ber, 0)
+	var out []byte
+	out, _, err := ber2derImpl(out, ber)
 	if err != nil {
 		return nil, err
 	}
-	obj.EncodeTo(out)
-
-	// if offset < len(ber) {
-	//	return nil, fmt.Errorf("ber2der: Content longer than expected. Got %d, expected %d", offset, len(ber))
-	//}
-
-	return out.Bytes(), nil
+	return out, nil
 }
 
-// encodes lengths that are longer than 127 into string of bytes
-func marshalLongLength(out *bytes.Buffer, i int) (err error) {
-	n := lengthLength(i)
+// Maximum supported count of length bytes in the definite form of the BER length
+// sequence. This allows sequences with up to 2**31 - 1 bytes.
+const maxLengthOctetCount = 4
 
-	for ; n > 0; n-- {
-		err = out.WriteByte(byte(i >> uint((n-1)*8)))
-		if err != nil {
-			return
-		}
-	}
-
-	return nil
-}
-
-// computes the byte length of an encoded length value
-func lengthLength(i int) (numBytes int) {
-	numBytes = 1
-	for i > 255 {
-		numBytes++
-		i >>= 8
-	}
-	return
-}
+// Maximum number of bytes in DER length encoding: 1 prefix and the following
+// bytes with the length bits.
+const maxDERLengthSpan = 1 + maxLengthOctetCount
 
 // encodes the length in DER format
 // If the length fits in 7 bits, the value is encoded directly.
@@ -97,41 +35,37 @@ func lengthLength(i int) (numBytes int) {
 // added to 0x80. The length is encoded in big endian encoding follow after
 //
 // Examples:
-//  length | byte 1 | bytes n
-//  0      | 0x00   | -
-//  120    | 0x78   | -
-//  200    | 0x81   | 0xC8
-//  500    | 0x82   | 0x01 0xF4
 //
-func encodeLength(out *bytes.Buffer, length int) (err error) {
+//	length | byte 1 | bytes n
+//	0      | 0x00   | -
+//	120    | 0x78   | -
+//	200    | 0x81   | 0xC8
+//	500    | 0x82   | 0x01 0xF4
+func encodeLength(out []byte, length int) []byte {
 	if length >= 128 {
-		l := lengthLength(length)
-		err = out.WriteByte(0x80 | byte(l))
-		if err != nil {
-			return
+		lengthSpan := 1
+		for i := length; i > 255; i >>= 8 {
+			lengthSpan++
 		}
-		err = marshalLongLength(out, length)
-		if err != nil {
-			return
+		out = append(out, 0x80|byte(lengthSpan))
+		for i := lengthSpan; i > 0; i-- {
+			out = append(out, byte(length>>uint((i-1)*8)))
 		}
 	} else {
-		err = out.WriteByte(byte(length))
-		if err != nil {
-			return
-		}
+		out = append(out, byte(length))
 	}
-	return
+	return out
 }
 
-func readObject(ber []byte, offset int) (asn1Object, int, error) {
-	berLen := len(ber)
-	if offset >= berLen {
-		return nil, 0, errors.New("ber2der: offset is after end of ber data")
+func ber2derImpl(
+	out []byte, ber []byte,
+) ([]byte, int, error) {
+	if len(ber) == 0 {
+		return nil, 0, errors.New("ber2der: empty BER object")
 	}
-	tagStart := offset
-	b := ber[offset]
-	offset++
-	if offset >= berLen {
+	b := ber[0]
+	offset := 1
+	if offset >= len(ber) {
 		return nil, 0, errors.New("ber2der: cannot move offset forward, end of ber data reached")
 	}
 	tag := b & 0x1F // last 5 bits
@@ -140,123 +74,113 @@ func readObject(ber []byte, offset int) (asn1Object, int, error) {
 		for ber[offset] >= 0x80 {
 			tag = tag*128 + ber[offset] - 0x80
 			offset++
-			if offset > berLen {
+			if offset > len(ber) {
 				return nil, 0, errors.New("ber2der: cannot move offset forward, end of ber data reached")
 			}
 		}
 		// jvehent 20170227: this doesn't appear to be used anywhere...
 		//tag = tag*128 + ber[offset] - 0x80
 		offset++
-		if offset > berLen {
+		if offset > len(ber) {
 			return nil, 0, errors.New("ber2der: cannot move offset forward, end of ber data reached")
 		}
 	}
-	tagEnd := offset
+	// Append the BER tag
+	out = append(out, ber[0:offset]...)
 
-	kind := b & 0x20
-	if kind == 0 {
-		debugprint("--> Primitive\n")
-	} else {
-		debugprint("--> Constructed\n")
-	}
+	isConstructed := (b & 0x20) != 0
+
 	// read length
 	var length int
 	l := ber[offset]
 	offset++
-	if offset > berLen {
+	if offset > len(ber) {
 		return nil, 0, errors.New("ber2der: cannot move offset forward, end of ber data reached")
 	}
 	indefinite := false
 	if l > 0x80 {
-		numberOfBytes := (int)(l & 0x7F)
-		if numberOfBytes > 4 { // int is only guaranteed to be 32bit
+		numberOfBytes := int(l & 0x7F)
+		if numberOfBytes > maxLengthOctetCount {
 			return nil, 0, errors.New("ber2der: BER tag length too long")
 		}
-		if numberOfBytes == 4 && (int)(ber[offset]) > 0x7F {
+		if numberOfBytes == maxLengthOctetCount && int(ber[offset]) > 0x7F {
 			return nil, 0, errors.New("ber2der: BER tag length is negative")
 		}
-		if (int)(ber[offset]) == 0x0 {
+		if int(ber[offset]) == 0x0 {
 			return nil, 0, errors.New("ber2der: BER tag length has leading zero")
 		}
-		debugprint("--> (compute length) indicator byte: %x\n", l)
-		debugprint("--> (compute length) length bytes: % X\n", ber[offset:offset+numberOfBytes])
 		for i := 0; i < numberOfBytes; i++ {
-			length = length*256 + (int)(ber[offset])
+			length = length*256 + int(ber[offset])
 			offset++
-			if offset > berLen {
+			if offset > len(ber) {
 				return nil, 0, errors.New("ber2der: cannot move offset forward, end of ber data reached")
 			}
 		}
+		if length < 0 {
+			return nil, 0, errors.New("ber2der: invalid negative value found in BER tag length")
+		}
 	} else if l == 0x80 {
+		// Keep length at 0
 		indefinite = true
 	} else {
 		length = (int)(l)
 	}
-	if length < 0 {
-		return nil, 0, errors.New("ber2der: invalid negative value found in BER tag length")
-	}
-	//fmt.Printf("--> length        : %d\n", length)
-	contentEnd := offset + length
-	if contentEnd > len(ber) {
-		return nil, 0, errors.New("ber2der: BER tag length is more than available data")
-	}
-	debugprint("--> content start : %d\n", offset)
-	debugprint("--> content end   : %d\n", contentEnd)
-	debugprint("--> content       : % X\n", ber[offset:contentEnd])
-	var obj asn1Object
-	if indefinite && kind == 0 {
-		return nil, 0, errors.New("ber2der: Indefinite form tag must have constructed encoding")
-	}
-	if kind == 0 {
-		obj = asn1Primitive{
-			tagBytes: ber[tagStart:tagEnd],
-			length:   length,
-			content:  ber[offset:contentEnd],
+
+	var contentEnd int
+	if !indefinite {
+		contentEnd = offset + length
+		if contentEnd > len(ber) {
+			return nil, 0, errors.New("ber2der: BER tag length is more than available data")
 		}
-	} else {
-		var subObjects []asn1Object
-		for (offset < contentEnd) || indefinite {
-			var subObj asn1Object
-			var err error
-			subObj, offset, err = readObject(ber, offset)
-			if err != nil {
-				return nil, 0, err
+	}
+
+	if !isConstructed {
+		if indefinite {
+			return nil, 0, errors.New("ber2der: Indefinite form tag must have constructed encoding")
+		}
+		out = encodeLength(out, length)
+		out = append(out, ber[offset:contentEnd]...)
+		return out, contentEnd, nil
+	}
+
+	// Reserve the max length span in the buffer and encode the child elements.
+	var reserved [maxDERLengthSpan]byte
+	lengthWriteOffset := len(out)
+	out = append(out, reserved[:]...)
+
+	for indefinite || (offset != contentEnd) {
+		var err error
+		var n int
+		out, n, err = ber2derImpl(out, ber[offset:])
+		if err != nil {
+			return nil, 0, err
+		}
+		offset += n
+		if indefinite {
+			if len(ber)-2 < offset {
+				return nil, 0, errors.New("ber2der: Invalid BER format")
 			}
-			subObjects = append(subObjects, subObj)
-
-			if indefinite {
-				terminated, err := isIndefiniteTermination(ber, offset)
-				if err != nil {
-					return nil, 0, err
-				}
-
-				if terminated {
-					break
-				}
+			terminated := ber[offset] == 0 && ber[offset+1] == 0
+			if terminated {
+				offset += 2
+				break
 			}
+		} else if offset > contentEnd {
+			return nil, 0, errors.New(
+				"ber2der: a nested object spans beyond parent's length")
 		}
-		obj = asn1Structured{
-			tagBytes: ber[tagStart:tagEnd],
-			content:  subObjects,
-		}
 	}
 
-	// Apply indefinite form length with 0x0000 terminator.
-	if indefinite {
-		contentEnd = offset + 2
-	}
+	// Calculate the real length of children, encode that in the reserved space,
+	// then move the children to the remove the hole between the actual and the
+	// reserved spans.
+	writtenLength := len(out) - maxDERLengthSpan - lengthWriteOffset
+	outLength := encodeLength(
+		out[lengthWriteOffset:lengthWriteOffset], writtenLength)
+	encodedLengthSpan := len(outLength)
+	copy(out[lengthWriteOffset+encodedLengthSpan:],
+		out[lengthWriteOffset+maxDERLengthSpan:])
+	out = out[:len(out)-maxDERLengthSpan+encodedLengthSpan]
 
-	return obj, contentEnd, nil
-}
-
-func isIndefiniteTermination(ber []byte, offset int) (bool, error) {
-	if len(ber) - offset < 2 {
-		return false, errors.New("ber2der: Invalid BER format")
-	}
-
-	return bytes.Index(ber[offset:], []byte{0x0, 0x0}) == 0, nil
-}
-
-func debugprint(format string, a ...interface{}) {
-	//fmt.Printf(format, a)
+	return out, offset, nil
 }
