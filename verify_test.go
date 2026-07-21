@@ -7,6 +7,7 @@ import (
 	"crypto/x509"
 	"encoding/base64"
 	"encoding/pem"
+	"hash"
 	"io/ioutil"
 	"os"
 	"os/exec"
@@ -79,6 +80,126 @@ ndxb7piVXb9RBwm3OoU2tE1BlXMX+sVXmAkEhd2dwDsaxrI3sHf1xGXem5AimQRF
 JBOFyaCnMotGNioSHY5hAkEAxyXcNixQ2RpLXJTQZtwnbk0XDcbgB+fBgXnv/4f3
 BCvcu85DqJeJyQv44Oe1qsXEX9BfcQIOVaoep35RPlKi9g==
 -----END PRIVATE KEY-----`
+
+func TestVerifyWithHashCalcFunc(t *testing.T) {
+	fixture := UnmarshalTestFixture(HashCalcSignedTestFixture)
+	p7, err := Parse(fixture.Input)
+	if err != nil {
+		t.Errorf("Parse encountered unexpected error: %v", err)
+	}
+
+	const longBuffer = "Lorem ipsum dolor sit amet, consectetur adipiscing elit. Nam a molestie odio, id accumsan dolor. Praesent ultricies enim et pharetra molestie. Lorem ipsum dolor sit amet, consectetur adipiscing elit. Curabitur vitae pellentesque tortor. Curabitur nulla mi, semper non lectus nec, auctor euismod tellus. Nunc vestibulum nisi quis felis efficitur, vel finibus nunc vehicula. Mauris ipsum mi, eleifend in urna non, pellentesque facilisis turpis. Ut eleifend viverra imperdiet. Vestibulum ut ligula non nunc vestibulum lobortis. Curabitur at elementum nisl. Sed facilisis ligula in pulvinar aliquet. Sed semper interdum ipsum quis hendrerit."
+	reader := bytes.NewReader([]byte(longBuffer))
+	p7.HashCalc = func(h hash.Hash, b []byte) []byte {
+		bufferSize := 128
+		buffer := make([]byte, bufferSize)
+		for {
+			count, err := reader.Read(buffer)
+			if err != nil {
+				break
+			}
+			h.Write(buffer[:count])
+		}
+		return h.Sum(nil)
+	}
+
+	if err := p7.Verify(); err != nil {
+		t.Errorf("Verify failed with error: %v", err)
+	}
+}
+
+var HashCalcSignedTestFixture = `
+-----BEGIN PKCS7-----
+MIIIjgYJKoZIhvcNAQcCoIIIfzCCCHsCAQExCTAHBgUrDgMCGjCCApAGCSqGSIb3
+DQEHAaCCAoEEggJ9TG9yZW0gaXBzdW0gZG9sb3Igc2l0IGFtZXQsIGNvbnNlY3Rl
+dHVyIGFkaXBpc2NpbmcgZWxpdC4gTmFtIGEgbW9sZXN0aWUgb2RpbywgaWQgYWNj
+dW1zYW4gZG9sb3IuIFByYWVzZW50IHVsdHJpY2llcyBlbmltIGV0IHBoYXJldHJh
+IG1vbGVzdGllLiBMb3JlbSBpcHN1bSBkb2xvciBzaXQgYW1ldCwgY29uc2VjdGV0
+dXIgYWRpcGlzY2luZyBlbGl0LiBDdXJhYml0dXIgdml0YWUgcGVsbGVudGVzcXVl
+IHRvcnRvci4gQ3VyYWJpdHVyIG51bGxhIG1pLCBzZW1wZXIgbm9uIGxlY3R1cyBu
+ZWMsIGF1Y3RvciBldWlzbW9kIHRlbGx1cy4gTnVuYyB2ZXN0aWJ1bHVtIG5pc2kg
+cXVpcyBmZWxpcyBlZmZpY2l0dXIsIHZlbCBmaW5pYnVzIG51bmMgdmVoaWN1bGEu
+IE1hdXJpcyBpcHN1bSBtaSwgZWxlaWZlbmQgaW4gdXJuYSBub24sIHBlbGxlbnRl
+c3F1ZSBmYWNpbGlzaXMgdHVycGlzLiBVdCBlbGVpZmVuZCB2aXZlcnJhIGltcGVy
+ZGlldC4gVmVzdGlidWx1bSB1dCBsaWd1bGEgbm9uIG51bmMgdmVzdGlidWx1bSBs
+b2JvcnRpcy4gQ3VyYWJpdHVyIGF0IGVsZW1lbnR1bSBuaXNsLiBTZWQgZmFjaWxp
+c2lzIGxpZ3VsYSBpbiBwdWx2aW5hciBhbGlxdWV0LiBTZWQgc2VtcGVyIGludGVy
+ZHVtIGlwc3VtIHF1aXMgaGVuZHJlcml0LqCCBI8wggItMIIBlqADAgECAgReT4E0
+MA0GCSqGSIb3DQEBBQUAMDkxEDAOBgNVBAoTB0FjbWUgQ28xJTAjBgNVBAMTHFBL
+Q1M3IFRlc3QgSW50ZXJtZWRpYXRlIENlcnQwHhcNMjUwMjAyMTgxNzAzWhcNMjYw
+MjAyMTgxNzA0WjAzMRAwDgYDVQQKEwdBY21lIENvMR8wHQYDVQQDExZQS0NTNyBU
+ZXN0IFNpZ25lciBDZXJ0MIGfMA0GCSqGSIb3DQEBAQUAA4GNADCBiQKBgQCvMS2h
+EtmDRbmN83sWNs7nn4IpQlLJxS6yQoqBvRA8ZlSR57UbrOmJD/c1x+BBQUIjrkmk
+xlw6TzEUTv2iVb3GoE1cd3vapUujosS2n1k4f4vIU8qDbweK9RBDC8GJSlLwi83v
+gXg1/It5xVXwW9Al+Xx9v1Qr4S/YL2UvPnIEOQIDAQABo0gwRjAOBgNVHQ8BAf8E
+BAMCBaAwEwYDVR0lBAwwCgYIKwYBBQUHAwQwHwYDVR0jBBgwFoAUJnmLplTS8997
+3/Ud35byl8ofTe0wDQYJKoZIhvcNAQEFBQADgYEAUj63vKTNYJ6r9hIbnYq6AeAQ
+5SHgPQ9auP/QbMm9DbEx8pJGaXgAGXxkBK8RVEFms8OCJIK+9JdGceN+aVl3FL/n
+V5inmA43yuFAamD/gvhbqdxvf86/d7YgZn3ecKYaoZKaRJxGs/qbTl3XY8jDOhMz
+J9m0sEPi9mUuQUst6NUwggJaMIIBw6ADAgECAgUAtGVULDANBgkqhkiG9w0BAQUF
+ADAvMRAwDgYDVQQKEwdBY21lIENvMRswGQYDVQQDExJQS0NTNyBUZXN0IFJvb3Qg
+Q0EwHhcNMjUwMjAyMTgxNzAzWhcNMjYwMjAyMTgxNzA0WjA5MRAwDgYDVQQKEwdB
+Y21lIENvMSUwIwYDVQQDExxQS0NTNyBUZXN0IEludGVybWVkaWF0ZSBDZXJ0MIGf
+MA0GCSqGSIb3DQEBAQUAA4GNADCBiQKBgQCvMS2hEtmDRbmN83sWNs7nn4IpQlLJ
+xS6yQoqBvRA8ZlSR57UbrOmJD/c1x+BBQUIjrkmkxlw6TzEUTv2iVb3GoE1cd3va
+pUujosS2n1k4f4vIU8qDbweK9RBDC8GJSlLwi83vgXg1/It5xVXwW9Al+Xx9v1Qr
+4S/YL2UvPnIEOQIDAQABo3gwdjAOBgNVHQ8BAf8EBAMCAqQwEwYDVR0lBAwwCgYI
+KwYBBQUHAwQwDwYDVR0TAQH/BAUwAwEB/zAdBgNVHQ4EFgQUJnmLplTS89973/Ud
+35byl8ofTe0wHwYDVR0jBBgwFoAUJnmLplTS89973/Ud35byl8ofTe0wDQYJKoZI
+hvcNAQEFBQADgYEAZ3EEdFK3otrKGlGvGJJrdzdBYzxnq/J7+VlhWBNNapBaMiBc
+hoTQDOrGHkzST6NezqzwTzLEEl+RRecpGJFDlj3+P5BFIeRGpUyf55nZjRJEmYer
+j4iLuLyoMTeU1grLAFy0zp78x4AjDT/6GiqKlXZX/YbZaODQyUjjhuISJ4cxggFC
+MIIBPgIBATBBMDkxEDAOBgNVBAoTB0FjbWUgQ28xJTAjBgNVBAMTHFBLQ1M3IFRl
+c3QgSW50ZXJtZWRpYXRlIENlcnQCBF5PgTQwBwYFKw4DAhqgXTAYBgkqhkiG9w0B
+CQMxCwYJKoZIhvcNAQcBMBwGCSqGSIb3DQEJBTEPFw0yNTAyMDIxODE3MDRaMCMG
+CSqGSIb3DQEJBDEWBBQuICjf8Q5uyWggGVKRZeomIoxeQjALBgkqhkiG9w0BAQUE
+gYCV3EPgmvq5IgP9yGrKfyrT2v5+Caw3aUkAC8rdi+NQME0FR0Ov0DCHfrgr8CR9
++d16d5vQZFrSKKocQmT/Jm30ggrrS6yVDIODt1c3qdkItnp9W67l7pEly87Wpwi/
+0X418iR3Q/g0kDj0Vw52dS2dJsFuebD1ZU/JPveXvywGcw==
+-----END PKCS7-----
+-----BEGIN CERTIFICATE-----
+MIICLTCCAZagAwIBAgIEXk+BNDANBgkqhkiG9w0BAQUFADA5MRAwDgYDVQQKEwdB
+Y21lIENvMSUwIwYDVQQDExxQS0NTNyBUZXN0IEludGVybWVkaWF0ZSBDZXJ0MB4X
+DTI1MDIwMjE4MTcwM1oXDTI2MDIwMjE4MTcwNFowMzEQMA4GA1UEChMHQWNtZSBD
+bzEfMB0GA1UEAxMWUEtDUzcgVGVzdCBTaWduZXIgQ2VydDCBnzANBgkqhkiG9w0B
+AQEFAAOBjQAwgYkCgYEArzEtoRLZg0W5jfN7FjbO55+CKUJSycUuskKKgb0QPGZU
+kee1G6zpiQ/3NcfgQUFCI65JpMZcOk8xFE79olW9xqBNXHd72qVLo6LEtp9ZOH+L
+yFPKg28HivUQQwvBiUpS8IvN74F4NfyLecVV8FvQJfl8fb9UK+Ev2C9lLz5yBDkC
+AwEAAaNIMEYwDgYDVR0PAQH/BAQDAgWgMBMGA1UdJQQMMAoGCCsGAQUFBwMEMB8G
+A1UdIwQYMBaAFCZ5i6ZU0vPfe9/1Hd+W8pfKH03tMA0GCSqGSIb3DQEBBQUAA4GB
+AFI+t7ykzWCeq/YSG52KugHgEOUh4D0PWrj/0GzJvQ2xMfKSRml4ABl8ZASvEVRB
+ZrPDgiSCvvSXRnHjfmlZdxS/51eYp5gON8rhQGpg/4L4W6ncb3/Ov3e2IGZ93nCm
+GqGSmkScRrP6m05d12PIwzoTMyfZtLBD4vZlLkFLLejV
+-----END CERTIFICATE-----
+-----BEGIN CERTIFICATE-----
+MIICWjCCAcOgAwIBAgIFALRlVCwwDQYJKoZIhvcNAQEFBQAwLzEQMA4GA1UEChMH
+QWNtZSBDbzEbMBkGA1UEAxMSUEtDUzcgVGVzdCBSb290IENBMB4XDTI1MDIwMjE4
+MTcwM1oXDTI2MDIwMjE4MTcwNFowOTEQMA4GA1UEChMHQWNtZSBDbzElMCMGA1UE
+AxMcUEtDUzcgVGVzdCBJbnRlcm1lZGlhdGUgQ2VydDCBnzANBgkqhkiG9w0BAQEF
+AAOBjQAwgYkCgYEArzEtoRLZg0W5jfN7FjbO55+CKUJSycUuskKKgb0QPGZUkee1
+G6zpiQ/3NcfgQUFCI65JpMZcOk8xFE79olW9xqBNXHd72qVLo6LEtp9ZOH+LyFPK
+g28HivUQQwvBiUpS8IvN74F4NfyLecVV8FvQJfl8fb9UK+Ev2C9lLz5yBDkCAwEA
+AaN4MHYwDgYDVR0PAQH/BAQDAgKkMBMGA1UdJQQMMAoGCCsGAQUFBwMEMA8GA1Ud
+EwEB/wQFMAMBAf8wHQYDVR0OBBYEFCZ5i6ZU0vPfe9/1Hd+W8pfKH03tMB8GA1Ud
+IwQYMBaAFCZ5i6ZU0vPfe9/1Hd+W8pfKH03tMA0GCSqGSIb3DQEBBQUAA4GBAGdx
+BHRSt6LayhpRrxiSa3c3QWM8Z6vye/lZYVgTTWqQWjIgXIaE0Azqxh5M0k+jXs6s
+8E8yxBJfkUXnKRiRQ5Y9/j+QRSHkRqVMn+eZ2Y0SRJmHq4+Ii7i8qDE3lNYKywBc
+tM6e/MeAIw0/+hoqipV2V/2G2Wjg0MlI44biEieH
+-----END CERTIFICATE-----
+-----BEGIN CERTIFICATE-----
+MIICLjCCAZegAwIBAgIEDhD97zANBgkqhkiG9w0BAQsFADAvMRAwDgYDVQQKEwdB
+Y21lIENvMRswGQYDVQQDExJQS0NTNyBUZXN0IFJvb3QgQ0EwHhcNMjUwMjAyMTgx
+NzAzWhcNMjYwMjAyMTgxNzA0WjAvMRAwDgYDVQQKEwdBY21lIENvMRswGQYDVQQD
+ExJQS0NTNyBUZXN0IFJvb3QgQ0EwgZ8wDQYJKoZIhvcNAQEBBQADgY0AMIGJAoGB
+AK8xLaES2YNFuY3zexY2zuefgilCUsnFLrJCioG9EDxmVJHntRus6YkP9zXH4EFB
+QiOuSaTGXDpPMRRO/aJVvcagTVx3e9qlS6OixLafWTh/i8hTyoNvB4r1EEMLwYlK
+UvCLze+BeDX8i3nFVfBb0CX5fH2/VCvhL9gvZS8+cgQ5AgMBAAGjVzBVMA4GA1Ud
+DwEB/wQEAwICpDATBgNVHSUEDDAKBggrBgEFBQcDBDAPBgNVHRMBAf8EBTADAQH/
+MB0GA1UdDgQWBBQmeYumVNLz33vf9R3flvKXyh9N7TANBgkqhkiG9w0BAQsFAAOB
+gQCpWSM5epx+nsZRdH6QGLR9q1JxSZ6+IeWgccu2WLE8k3usyItTCfkVMncPqzr3
+og/vYQFEMvfEyFCJy9CBpLXTjkOOuOD5M9mNaGnUMjPIpBkxtBLIaFz3qeuqDj04
+5i35yuWnAykAR+6kxEbNpkMD5uHznshVU8Mum990qP9Fqg==
+-----END CERTIFICATE-----`
 
 func TestVerifyAppStore(t *testing.T) {
 	fixture := UnmarshalTestFixture(AppStoreReceiptFixture)

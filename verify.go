@@ -75,8 +75,13 @@ func verifySignatureAtTime(p7 *PKCS7, signer signerInfo, truststore *x509.CertPo
 			return err
 		}
 		h := hash.New()
-		h.Write(p7.Content)
-		computed := h.Sum(nil)
+		var computed []byte
+		if p7.HashCalc != nil {
+			computed = p7.HashCalc(h, p7.Content)
+		} else {
+			h.Write(p7.Content)
+			computed = h.Sum(nil)
+		}
 		if subtle.ConstantTimeCompare(digest, computed) != 1 {
 			return &MessageDigestMismatchError{
 				ExpectedDigest: digest,
@@ -130,8 +135,13 @@ func verifySignature(p7 *PKCS7, signer signerInfo, truststore *x509.CertPool) (e
 			return err
 		}
 		h := hash.New()
-		h.Write(p7.Content)
-		computed := h.Sum(nil)
+		var computed []byte
+		if p7.HashCalc != nil {
+			computed = p7.HashCalc(h, p7.Content)
+		} else {
+			h.Write(p7.Content)
+			computed = h.Sum(nil)
+		}
 		if subtle.ConstantTimeCompare(digest, computed) != 1 {
 			return &MessageDigestMismatchError{
 				ExpectedDigest: digest,
